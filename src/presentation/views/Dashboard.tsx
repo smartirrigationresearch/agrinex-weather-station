@@ -13,7 +13,8 @@ import {
   TrendingUp, TrendingDown, Minus, 
   ArrowUpDown, CloudSun, 
   AlertTriangle, Calendar, CloudRain, Table,
-  Clock, ChevronRight, CheckCircle2, FileJson, FileSpreadsheet
+  Clock, ChevronRight, ChevronLeft, CheckCircle2, FileJson, FileSpreadsheet,
+  SlidersHorizontal
 } from 'lucide-react';
 import type { WeatherTelemetry } from '../../core/types/weather.types';
 import type { BmkgForecastData } from '../../core/types/bmkg.types';
@@ -57,6 +58,27 @@ interface TelemetryLogEntry extends WeatherTelemetry {
   displayTime: string;
 }
 
+// SSR Pre-seeded historical telemetry data generator for instant initial hydration
+function generateInitialSsrData(): TelemetryLogEntry[] {
+  const initialLogs: TelemetryLogEntry[] = [];
+  const now = Date.now();
+  for (let i = 0; i < 15; i++) {
+    const timeOffset = i * 3000;
+    const date = new Date(now - timeOffset);
+    const displayTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    initialLogs.push({
+      id: `ssr-seed-${i}`,
+      timestamp: date.toISOString(),
+      temperature: Number((26.5 + Math.sin(i) * 0.8).toFixed(1)),
+      humidity: Number((74.0 + Math.cos(i) * 2.0).toFixed(1)),
+      wind_speed: Number((4.2 + (i % 3) * 0.5).toFixed(1)),
+      light_lux: 450 + (i * 15) % 300,
+      displayTime,
+    });
+  }
+  return initialLogs;
+}
+
 export function Dashboard() {
   const { data: mqttData, connected } = useWeatherRealtime();
   const { bmkgData: liveBmkg, tomorrowForecast } = useBmkgComparison(mqttData);
@@ -66,10 +88,16 @@ export function Dashboard() {
   const [tempChart, setTempChart] = useState<ChartPoint[]>([]);
   const [humChart, setHumChart] = useState<ChartPoint[]>([]);
   const [windChart, setWindChart] = useState<ChartPoint[]>([]);
-  const [telemetryLogs, setTelemetryLogs] = useState<TelemetryLogEntry[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   
+  // SSR initial state seed to avoid blank table during server-side hydration
+  const [telemetryLogs, setTelemetryLogs] = useState<TelemetryLogEntry[]>(() => generateInitialSsrData());
+  const [lastUpdate, setLastUpdate] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(5);
+
   // Real-time live clock (Jam Sekarang)
   const [currentTime, setCurrentTime] = useState<string>('');
   const [dayNumber, setDayNumber] = useState<string>('');
@@ -135,7 +163,7 @@ export function Dashboard() {
         displayTime,
       };
       const updated = [newEntry, ...prev];
-      return updated.slice(0, 20);
+      return updated.slice(0, 100); // Keep up to 100 historical logs in buffer
     });
   }, [fieldData, bmkgData]);
 
@@ -154,6 +182,25 @@ export function Dashboard() {
   const feelsLike = useMemo(() => {
     return fieldData?.temperature ? (fieldData.temperature + 1.5).toFixed(0) : '25';
   }, [fieldData?.temperature]);
+
+  // Pagination Calculations (Memoized for optimal SSR & render speed)
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(telemetryLogs.length / itemsPerPage)), [telemetryLogs.length, itemsPerPage]);
+  
+  const paginatedLogs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return telemetryLogs.slice(start, start + itemsPerPage);
+  }, [telemetryLogs, currentPage, itemsPerPage]);
+
+  const startIndex = useMemo(() => Math.min((currentPage - 1) * itemsPerPage + 1, telemetryLogs.length), [currentPage, itemsPerPage, telemetryLogs.length]);
+  const endIndex = useMemo(() => Math.min(currentPage * itemsPerPage, telemetryLogs.length), [currentPage, itemsPerPage, telemetryLogs.length]);
+
+  const handlePrevPage = useCallback(() => {
+    setCurrentPage(prev => Math.max(1, prev - 1));
+  }, []);
+
+  const handleNextPage = useCallback(() => {
+    setCurrentPage(prev => Math.min(totalPages, prev + 1));
+  }, [totalPages]);
 
   const handleExportJson = useCallback(() => {
     downloadJson(telemetryLogs, `agrinex_weather_log_${Date.now()}.json`);
@@ -400,7 +447,7 @@ export function Dashboard() {
         <ChartWidget data={windChart} title="Perbandingan Kecepatan Angin" unit=" km/h" />
       </section>
 
-      {/* Full Telemetry Log Table Section + EXPORT BUTTONS */}
+      {/* Full Telemetry Log Table Section + EXPORT BUTTONS & PAGINATION */}
       <section className="animate-fade-in" style={{ animationDelay: '0.4s' }}>
         <Card>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
@@ -447,7 +494,7 @@ export function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-300/30">
-                    {telemetryLogs.map((log) => (
+                    {paginatedLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-white/40 transition-colors">
                         <td className="py-2 px-2 font-mono text-gray-600 whitespace-nowrap">{log.displayTime}</td>
                         <td className="py-2 px-2 text-center font-bold text-gray-800 tabular-nums whitespace-nowrap">{log.temperature.toFixed(1)}°C</td>
@@ -467,7 +514,7 @@ export function Dashboard() {
 
               {/* Mobile Telemetry List Cards */}
               <div className="sm:hidden space-y-2">
-                {telemetryLogs.map((log) => (
+                {paginatedLogs.map((log) => (
                   <div key={log.id} className="p-3 rounded-2xl neo-pressed space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-mono text-gray-600 font-bold">{log.displayTime}</span>
@@ -495,6 +542,67 @@ export function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* NEUMORPHIC PAGINATION BAR */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 mt-3 border-t border-gray-300/40 text-xs">
+                {/* Info range data */}
+                <div className="text-[11px] text-gray-500 font-medium text-center sm:text-left">
+                  Menampilkan <span className="font-bold text-gray-800">{startIndex}-{endIndex}</span> dari <span className="font-bold text-gray-800">{telemetryLogs.length}</span> log telemetry
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Select items per page */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                    <SlidersHorizontal size={13} className="text-gray-600" />
+                    <span>Baris:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="px-2 py-1 rounded-lg neo-pressed bg-[var(--color-neo-bg)] text-xs font-bold text-gray-800 border-none outline-none cursor-pointer"
+                    >
+                      <option value={5}>5</option>
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                    </select>
+                  </div>
+
+                  {/* Navigation controls */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={currentPage === 1}
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        currentPage === 1 
+                          ? 'neo-pressed opacity-40 cursor-not-allowed text-gray-400' 
+                          : 'neo-pressed hover:bg-gray-200/60 active:scale-90 text-gray-700 cursor-pointer'
+                      }`}
+                      title="Halaman Sebelumnya"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+
+                    <div className="px-3 py-1 rounded-xl neo-pressed text-[11px] font-bold text-gray-800 font-mono">
+                      {currentPage} / {totalPages}
+                    </div>
+
+                    <button
+                      onClick={handleNextPage}
+                      disabled={currentPage === totalPages}
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
+                        currentPage === totalPages 
+                          ? 'neo-pressed opacity-40 cursor-not-allowed text-gray-400' 
+                          : 'neo-pressed hover:bg-gray-200/60 active:scale-90 text-gray-700 cursor-pointer'
+                      }`}
+                      title="Halaman Selanjutnya"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </>
           )}
