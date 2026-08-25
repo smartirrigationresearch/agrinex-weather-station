@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+@theme {
+  --color-neo-bg: #e6e9ef;
+  --color-neo-card: #e6e9ef;
+  --color-neo-text: #1f2937;
+  --color-neo-text-muted: #6b7280;
+  --color-neo-accent: #111827;
+
+  --shadow-neo-flat: 8px 8px 16px #c5c8cf, -8px -8px 16px #ffffff;
+  --shadow-neo-pressed: inset 4px 4px 8px #c5c8cf, inset -4px -4px 8px #ffffff;
+  --shadow-neo-convex: 5px 5px 10px #c5c8cf, -5px -5px 10px #ffffff;
+  --shadow-neo-inset-deep: inset 6px 6px 12px #b8bbce, inset -6px -6px 12px #ffffff;
+  --shadow-neo-pill: 4px 4px 8px #c5c8cf, -4px -4px 8px #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-neo-bg);
+  color: var(--color-neo-text);
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Neumorphic utility classes */
+.neo-card {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-flat);
+  border-radius: 24px;
+}
+
+.neo-pressed {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-pressed);
+  border-radius: 16px;
+}
+
+.neo-pill {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-flat);
+  border-radius: 9999px;
+}
+
+.neo-pill-pressed {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-pressed);
+  border-radius: 9999px;
+}
+
+.neo-circle {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-flat);
+  border-radius: 50%;
+}
+
+.neo-circle-pressed {
+  background: var(--color-neo-card);
+  box-shadow: var(--shadow-neo-pressed);
+  border-radius: 50%;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #c5c8cf;
+  border-radius: 3px;
+}
+
+/* Pulse animation for live status */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.25); }
+}
+.animate-pulse-live {
+  animation: pulse-live 2s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
