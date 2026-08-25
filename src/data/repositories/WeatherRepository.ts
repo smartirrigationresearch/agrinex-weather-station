@@ -9,10 +9,14 @@ export interface IWeatherRepository {
 }
 
 export class WeatherRepository implements IWeatherRepository {
-  constructor(private mqttSource: MqttDataSource) {}
+  private mqttSource: MqttDataSource;
+
+  constructor(mqttSource: MqttDataSource) {
+    this.mqttSource = mqttSource;
+  }
 
   subscribe(callback: (data: WeatherTelemetry) => void): void {
-    this.mqttSource.onMessage((topic, payload) => {
+    this.mqttSource.onMessage((_topic, payload) => {
       try {
         const data = JSON.parse(payload) as WeatherTelemetry;
         callback(data);

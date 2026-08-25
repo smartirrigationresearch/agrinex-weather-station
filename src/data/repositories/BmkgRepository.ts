@@ -7,7 +7,11 @@ export interface IBmkgRepository {
 }
 
 export class BmkgRepository implements IBmkgRepository {
-  constructor(private apiSource: BmkgApiDataSource) {}
+  private apiSource: BmkgApiDataSource;
+
+  constructor(apiSource: BmkgApiDataSource) {
+    this.apiSource = apiSource;
+  }
 
   async getLatestObservation(): Promise<BmkgForecastData> {
     return this.apiSource.fetchCurrentObservation();

@@ -11,8 +11,8 @@ import { downloadJson, downloadCsv } from '../../core/utils/export.utils';
 import { 
   Thermometer, Droplets, Wind, Sun, 
   TrendingUp, TrendingDown, Minus, 
-  ArrowUpDown, CloudSun, MapPin, 
-  AlertTriangle, Radio, Calendar, CloudRain, Table,
+  ArrowUpDown, CloudSun, 
+  AlertTriangle, Calendar, CloudRain, Table,
   Clock, ChevronRight, CheckCircle2, FileJson, FileSpreadsheet
 } from 'lucide-react';
 import type { WeatherTelemetry } from '../../core/types/weather.types';

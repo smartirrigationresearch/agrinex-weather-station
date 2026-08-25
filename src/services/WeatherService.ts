@@ -10,7 +10,11 @@ export interface ComparisonMetrics {
 }
 
 export class WeatherService {
-  constructor(private bmkgRepo: IBmkgRepository) {}
+  private bmkgRepo: IBmkgRepository;
+
+  constructor(bmkgRepo: IBmkgRepository) {
+    this.bmkgRepo = bmkgRepo;
+  }
 
   async getBmkgObservation(): Promise<BmkgForecastData> {
     return this.bmkgRepo.getLatestObservation();

@@ -2,7 +2,11 @@ import type { IWeatherRepository } from '../data/repositories/WeatherRepository'
 import type { WeatherTelemetry } from '../core/types/weather.types';
 
 export class MqttService {
-  constructor(private weatherRepo: IWeatherRepository) {}
+  private weatherRepo: IWeatherRepository;
+
+  constructor(weatherRepo: IWeatherRepository) {
+    this.weatherRepo = weatherRepo;
+  }
 
   start(): void {
     this.weatherRepo.connect();
