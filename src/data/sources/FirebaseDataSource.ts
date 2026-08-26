@@ -64,10 +64,14 @@ export class FirebaseDataSource {
 
       // Sort client-side descending (terbaru di atas)
       logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
       return logs;
-    } catch (error) {
-      console.error('[Firebase] Gagal mengambil telemetry:', error);
+
+    } catch (error: any) {
+      if (error?.code === 'permission-denied') {
+        console.warn('[Firebase] Rules notice: Firestore permission pending sync.');
+      } else {
+        console.error('[Firebase] Gagal mengambil telemetry:', error);
+      }
       return [];
     }
   }
