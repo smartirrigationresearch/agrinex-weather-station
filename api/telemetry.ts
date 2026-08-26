@@ -1,14 +1,25 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 
-// Store last telemetry in memory across serverless warm instances
-let cachedTelemetry = {
-  timestamp: new Date().toISOString(),
-  temperature: 27.4,
-  humidity: 76.5,
-  wind_speed: 8.4,
-  light_lux: 54612,
-  updatedAt: Date.now()
-};
+interface TelemetryEntry {
+  timestamp: string;
+  temperature: number;
+  humidity: number;
+  wind_speed: number;
+  light_lux: number;
+  updatedAt: number;
+}
+
+// In-memory array of historical 15-minute telemetry logs (max 100 entries)
+let telemetryHistory: TelemetryEntry[] = [
+  {
+    timestamp: new Date().toISOString(),
+    temperature: 27.4,
+    humidity: 76.8,
+    wind_speed: 8.4,
+    light_lux: 54612,
+    updatedAt: Date.now()
+  }
+];
 
 export default function handler(
   req: IncomingMessage & { body?: any; method?: string }, 
@@ -34,7 +45,7 @@ export default function handler(
       try {
         const body = bodyData ? JSON.parse(bodyData) : req.body;
         if (body && (body.temperature !== undefined || body.temp !== undefined)) {
-          cachedTelemetry = {
+          const newEntry: TelemetryEntry = {
             timestamp: body.timestamp || new Date().toISOString(),
             temperature: Number(body.temperature ?? body.temp ?? 0),
             humidity: Number(body.humidity ?? body.hum ?? 0),
@@ -42,9 +53,20 @@ export default function handler(
             light_lux: Number(body.light_lux ?? body.lightLux ?? 0),
             updatedAt: Date.now()
           };
+
+          // Hindari duplikasi jika timestamp persis sama dalam selang waktu singkat
+          if (telemetryHistory.length === 0 || telemetryHistory[0].timestamp !== newEntry.timestamp) {
+            telemetryHistory.unshift(newEntry);
+            if (telemetryHistory.length > 100) {
+              telemetryHistory = telemetryHistory.slice(0, 100);
+            }
+          } else {
+            telemetryHistory[0] = newEntry;
+          }
+
           res.statusCode = 200;
           res.setHeader('Content-Type', 'application/json');
-          return res.end(JSON.stringify({ status: 'ok', data: cachedTelemetry }));
+          return res.end(JSON.stringify({ status: 'ok', latest: newEntry, history: telemetryHistory }));
         }
       } catch (err) {
         console.error('Failed to parse POST body:', err);
@@ -56,8 +78,12 @@ export default function handler(
     return;
   }
 
-  // GET request: Return cached telemetry
+  // GET request: Return latest telemetry and full 15-minute history array
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
-  return res.end(JSON.stringify(cachedTelemetry));
+  return res.end(JSON.stringify({
+    latest: telemetryHistory[0] || null,
+    history: telemetryHistory,
+    ...(telemetryHistory[0] || {})
+  }));
 }

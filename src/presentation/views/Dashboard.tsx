@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useWeatherRealtime } from '../../hooks/useWeatherRealtime';
 import { useBmkgComparison } from '../../hooks/useBmkgComparison';
+import { weatherRepository } from '../../core/di';
 import { Card } from '../components/neumorphic/Card';
 import { StatusBadge } from '../components/neumorphic/StatusBadge';
 import { ChartWidget } from '../components/neumorphic/ChartWidget';
@@ -95,6 +96,24 @@ export function Dashboard() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Initial load history logs on mount
+  useEffect(() => {
+    weatherRepository.getHistory(50).then((history) => {
+      if (history && history.length > 0) {
+        const formattedLogs: TelemetryLogEntry[] = history.map((item, idx) => {
+          const dt = item.timestamp ? new Date(item.timestamp) : new Date();
+          const displayTime = isNaN(dt.getTime()) ? (item.timestamp || 'N/A') : dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return {
+            ...item,
+            id: `${item.timestamp || Date.now()}-${idx}`,
+            displayTime,
+          };
+        });
+        setTelemetryLogs(formattedLogs);
+      }
+    }).catch(err => console.warn('[Dashboard] History load notice:', err));
+  }, []);
+
   // Append chart & telemetry history log
   useEffect(() => {
     if (!fieldData || !bmkgData) return;
@@ -110,9 +129,12 @@ export function Dashboard() {
     setWindChart(prev => appendChart(prev, fieldData.wind_speed, bmkgData.wind_speed));
 
     setTelemetryLogs(prev => {
+      if (prev.length > 0 && prev[0].timestamp === fieldData.timestamp) {
+        return prev;
+      }
       const newEntry: TelemetryLogEntry = {
         ...fieldData,
-        id: `${Date.now()}-${Math.random()}`,
+        id: `${fieldData.timestamp || Date.now()}-${Math.random()}`,
         displayTime,
       };
       const updated = [newEntry, ...prev];
