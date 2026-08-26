@@ -30,8 +30,12 @@ export class FirebaseDataSource {
         createdAt: serverTimestamp(),
       });
       console.log('[Firebase] ✓ Telemetry berhasil disimpan permanen ke Cloud Database Firestore');
-    } catch (error) {
-      console.error('[Firebase] Gagal menyimpan telemetry:', error);
+    } catch (error: any) {
+      if (error?.code === 'permission-denied') {
+        console.warn('[Firebase Rules Notice] Akses Firestore ditolak. Buka Firebase Console -> Firestore -> Rules -> atur "allow read, write: if true;" -> Klik Publish.');
+      } else {
+        console.error('[Firebase] Gagal menyimpan telemetry:', error);
+      }
     }
   }
 
