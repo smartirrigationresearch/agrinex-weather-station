@@ -8,6 +8,7 @@ export interface IWeatherRepository {
   connect(): void;
   disconnect(): void;
   getHistory(limitCount?: number): Promise<WeatherTelemetry[]>;
+  saveTelemetry(data: WeatherTelemetry): Promise<void>;
 }
 
 export class WeatherRepository implements IWeatherRepository {
@@ -49,6 +50,10 @@ export class WeatherRepository implements IWeatherRepository {
 
   disconnect(): void {
     this.mqttSource.disconnect();
+  }
+
+  async saveTelemetry(data: WeatherTelemetry): Promise<void> {
+    await this.firebaseSource.saveTelemetry(data);
   }
 
   async getHistory(limitCount: number = 50): Promise<WeatherTelemetry[]> {

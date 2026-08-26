@@ -29,15 +29,20 @@ export function useWeatherRealtime() {
         if (res.ok) {
           const telemetry: WeatherTelemetry = await res.json();
           if (telemetry && (telemetry.temperature !== undefined || (telemetry as any).temp !== undefined)) {
+            const newTelemetry: WeatherTelemetry = {
+              timestamp: telemetry.timestamp || new Date().toISOString(),
+              temperature: Number(telemetry.temperature ?? (telemetry as any).temp ?? 0),
+              humidity: Number(telemetry.humidity ?? (telemetry as any).hum ?? 0),
+              wind_speed: Number(telemetry.wind_speed ?? (telemetry as any).windSpeed ?? 0),
+              light_lux: Number(telemetry.light_lux ?? (telemetry as any).lightLux ?? 0),
+            };
+
+            // Simpan secara permanen ke Firebase Cloud Database Firestore
+            weatherRepository.saveTelemetry(newTelemetry);
+
             setData(prev => {
-              if (!prev || prev.timestamp !== telemetry.timestamp) {
-                return {
-                  timestamp: telemetry.timestamp || new Date().toISOString(),
-                  temperature: Number(telemetry.temperature ?? (telemetry as any).temp ?? 0),
-                  humidity: Number(telemetry.humidity ?? (telemetry as any).hum ?? 0),
-                  wind_speed: Number(telemetry.wind_speed ?? (telemetry as any).windSpeed ?? 0),
-                  light_lux: Number(telemetry.light_lux ?? (telemetry as any).lightLux ?? 0),
-                };
+              if (!prev || prev.timestamp !== newTelemetry.timestamp) {
+                return newTelemetry;
               }
               return prev;
             });

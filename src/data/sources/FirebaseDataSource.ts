@@ -13,16 +13,23 @@ import type { WeatherTelemetry } from '../../core/types/weather.types';
 export class FirebaseDataSource {
   private telemetryCollection = collection(db, 'telemetry');
 
+  private lastSavedTimestamp: string = '';
+
   /**
-   * Menyimpan data telemetry baru ke Firestore (Hanya 96x write / hari).
-   * Sangat hemat dan jauh di bawah kuota gratis (20.000 write/hari).
+   * Menyimpan data telemetry baru secara permanen ke Firestore (Hanya 96x write / hari).
+   * Menjamin data tersimpan di Cloud Database Firebase (bukan local browser).
    */
   async saveTelemetry(data: WeatherTelemetry): Promise<void> {
+    if (!data.timestamp || data.timestamp === this.lastSavedTimestamp) {
+      return; // Sudah pernah disimpan ke Firebase
+    }
+    this.lastSavedTimestamp = data.timestamp;
     try {
       await addDoc(this.telemetryCollection, {
         ...data,
         createdAt: serverTimestamp(),
       });
+      console.log('[Firebase] ✓ Telemetry berhasil disimpan permanen ke Cloud Database Firestore');
     } catch (error) {
       console.error('[Firebase] Gagal menyimpan telemetry:', error);
     }
