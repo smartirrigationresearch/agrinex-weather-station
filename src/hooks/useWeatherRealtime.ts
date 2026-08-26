@@ -22,9 +22,40 @@ export function useWeatherRealtime() {
       }
     }).catch(err => console.warn('[Weather] History fetch notice:', err));
 
+    // Direct REST polling fallback (/api/telemetry) setara HTTPS native
+    const pollApi = async () => {
+      try {
+        const res = await fetch('/api/telemetry');
+        if (res.ok) {
+          const telemetry: WeatherTelemetry = await res.json();
+          if (telemetry && (telemetry.temperature !== undefined || (telemetry as any).temp !== undefined)) {
+            setData(prev => {
+              if (!prev || prev.timestamp !== telemetry.timestamp) {
+                return {
+                  timestamp: telemetry.timestamp || new Date().toISOString(),
+                  temperature: Number(telemetry.temperature ?? (telemetry as any).temp ?? 0),
+                  humidity: Number(telemetry.humidity ?? (telemetry as any).hum ?? 0),
+                  wind_speed: Number(telemetry.wind_speed ?? (telemetry as any).windSpeed ?? 0),
+                  light_lux: Number(telemetry.light_lux ?? (telemetry as any).lightLux ?? 0),
+                };
+              }
+              return prev;
+            });
+            setConnected(true);
+          }
+        }
+      } catch (err) {
+        // Silent catch for API polling fallback
+      }
+    };
+
+    pollApi();
+    const interval = setInterval(pollApi, 5000);
+
     mqttService.start();
 
     return () => {
+      clearInterval(interval);
       mqttService.stop();
     };
   }, []);
