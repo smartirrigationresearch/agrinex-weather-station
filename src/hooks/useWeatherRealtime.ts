@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { WeatherTelemetry } from '../core/types/weather.types';
-import { mqttService } from '../core/di';
+import { mqttService, weatherRepository } from '../core/di';
 
 export function useWeatherRealtime() {
   const [data, setData] = useState<WeatherTelemetry | null>(null);
@@ -14,6 +14,13 @@ export function useWeatherRealtime() {
     mqttService.onTelemetry((telemetry) => {
       setData(telemetry);
     });
+
+    // Initial load from Firebase history so web app shows real data immediately
+    weatherRepository.getHistory(50).then((history) => {
+      if (history && history.length > 0) {
+        setData(prev => prev || history[0]);
+      }
+    }).catch(err => console.warn('[Weather] History fetch notice:', err));
 
     mqttService.start();
 

@@ -10,8 +10,8 @@ const mqttDataSource = new MqttDataSource();
 const bmkgApiDataSource = new BmkgApiDataSource();
 const firebaseDataSource = new FirebaseDataSource();
 
-const weatherRepository = new WeatherRepository(mqttDataSource, firebaseDataSource);
-const bmkgRepository = new BmkgRepository(bmkgApiDataSource);
+export const weatherRepository = new WeatherRepository(mqttDataSource, firebaseDataSource);
+export const bmkgRepository = new BmkgRepository(bmkgApiDataSource);
 
 export const mqttService = new MqttService(weatherRepository);
 export const weatherService = new WeatherService(bmkgRepository);
