@@ -78,14 +78,22 @@ export function Dashboard() {
     }
   }, [liveBmkg]);
 
-  // Sync real MQTT telemetry data when connected
+  // Sync real telemetry data (from MQTT or Firebase HTTPS Stream)
   useEffect(() => {
-    if (connected && mqttData) {
+    if (mqttData) {
       setFieldData(mqttData);
       setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setIsLoading(false);
     }
-  }, [connected, mqttData]);
+  }, [mqttData]);
+
+  // Initial load timeout protection (Selesai skeleton loader maks 1.5s)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Append chart & telemetry history log
   useEffect(() => {

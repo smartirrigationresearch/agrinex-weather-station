@@ -20,6 +20,7 @@ export class WeatherRepository implements IWeatherRepository {
   }
 
   subscribe(callback: (data: WeatherTelemetry) => void): void {
+    // 1. MQTT Stream (WS/WSS)
     this.mqttSource.onMessage((_topic, payload) => {
       try {
         const data = JSON.parse(payload) as WeatherTelemetry;
@@ -29,6 +30,12 @@ export class WeatherRepository implements IWeatherRepository {
       } catch (err) {
         console.error('Failed to parse telemetry data', err);
       }
+    });
+
+    // 2. Firebase Firestore Realtime Stream (HTTPS compliant)
+    // Memastikan data ter-update secara otomatis di web HTTPS tanpa hambatan Mixed Content
+    this.firebaseSource.subscribeTelemetry((data) => {
+      callback(data);
     });
   }
 

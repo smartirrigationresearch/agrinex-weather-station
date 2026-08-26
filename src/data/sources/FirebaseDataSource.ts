@@ -5,7 +5,8 @@ import {
   query, 
   orderBy, 
   limit, 
-  serverTimestamp 
+  serverTimestamp,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../../core/config/firebase.config';
 import type { WeatherTelemetry } from '../../core/types/weather.types';
@@ -59,5 +60,32 @@ export class FirebaseDataSource {
       console.error('[Firebase] Gagal mengambil telemetry:', error);
       return [];
     }
+  }
+
+  /**
+   * Realtime listener via HTTPS Firestore snapshot.
+   * Berfungsi 100% sempurna pada halaman HTTPS tanpa error Mixed Content.
+   */
+  subscribeTelemetry(callback: (data: WeatherTelemetry) => void): () => void {
+    const q = query(
+      this.telemetryCollection,
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    );
+
+    return onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const d = snapshot.docs[0].data();
+        callback({
+          timestamp: d.timestamp,
+          temperature: d.temperature,
+          humidity: d.humidity,
+          wind_speed: d.wind_speed,
+          light_lux: d.light_lux,
+        });
+      }
+    }, (err) => {
+      console.warn('[Firebase] Realtime listener notice:', err);
+    });
   }
 }
