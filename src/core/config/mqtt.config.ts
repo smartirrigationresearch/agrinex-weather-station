@@ -1,9 +1,9 @@
 export const MQTT_CONFIG = {
-  host: import.meta.env.VITE_MQTT_HOST || '127.0.0.1',
+  host: import.meta.env.VITE_MQTT_HOST || '144.217.86.1',
   port: parseInt(import.meta.env.VITE_MQTT_WS_PORT || '8083'),
   path: import.meta.env.VITE_MQTT_PATH || '/mqtt',
-  username: import.meta.env.VITE_MQTT_USERNAME || 'guest',
-  password: import.meta.env.VITE_MQTT_PASSWORD || 'guest',
+  username: import.meta.env.VITE_MQTT_USERNAME || 'ghiffa',
+  password: import.meta.env.VITE_MQTT_PASSWORD || 'secret404!',
   topic: import.meta.env.VITE_MQTT_TOPIC || 'weather/telemetry',
 };
 
