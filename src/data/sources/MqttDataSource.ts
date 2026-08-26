@@ -13,31 +13,36 @@ export class MqttDataSource {
     if (this.client && this.client.connected) return;
 
     const url = getMqttUrl();
-    this.client = mqtt.connect(url, {
-      username: MQTT_CONFIG.username,
-      password: MQTT_CONFIG.password,
-      reconnectPeriod: 5000,
-    });
+    try {
+      this.client = mqtt.connect(url, {
+        username: MQTT_CONFIG.username,
+        password: MQTT_CONFIG.password,
+        reconnectPeriod: 5000,
+      });
 
-    this.client.on('connect', () => {
-      console.log('MQTT Connected to', url);
-      this.client?.subscribe(MQTT_CONFIG.topic);
-      this.notifyConnectionState(true);
-    });
+      this.client.on('connect', () => {
+        console.log('MQTT Connected to', url);
+        this.client?.subscribe(MQTT_CONFIG.topic);
+        this.notifyConnectionState(true);
+      });
 
-    this.client.on('message', (topic, message) => {
-      this.notifyMessage(topic, message.toString());
-    });
+      this.client.on('message', (topic, message) => {
+        this.notifyMessage(topic, message.toString());
+      });
 
-    this.client.on('close', () => {
+      this.client.on('close', () => {
+        this.notifyConnectionState(false);
+      });
+
+      this.client.on('error', (err) => {
+        console.error('MQTT Error:', err);
+        this.notifyConnectionState(false);
+        this.client?.end();
+      });
+    } catch (err) {
+      console.warn('[MQTT] Gagal membuat WebSocket connection:', err);
       this.notifyConnectionState(false);
-    });
-
-    this.client.on('error', (err) => {
-      console.error('MQTT Error:', err);
-      this.notifyConnectionState(false);
-      this.client?.end();
-    });
+    }
   }
 
   disconnect(): void {

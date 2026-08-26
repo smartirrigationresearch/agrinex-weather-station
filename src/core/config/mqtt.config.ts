@@ -8,7 +8,12 @@ export const MQTT_CONFIG = {
 };
 
 export const getMqttUrl = () => {
-  return `ws://${MQTT_CONFIG.host}:${MQTT_CONFIG.port}${MQTT_CONFIG.path}`;
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+  const protocol = import.meta.env.VITE_MQTT_PROTOCOL || (isHttps ? 'wss' : 'ws');
+  const defaultPort = isHttps ? 8084 : 8083;
+  const port = import.meta.env.VITE_MQTT_WS_PORT ? parseInt(import.meta.env.VITE_MQTT_WS_PORT) : defaultPort;
+
+  return `${protocol}://${MQTT_CONFIG.host}:${port}${MQTT_CONFIG.path}`;
 };
 
 // Lokasi Node sensor & wilayah BMKG yang sinkron
