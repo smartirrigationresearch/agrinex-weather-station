@@ -13,9 +13,10 @@ export const getMqttUrl = () => {
 
 // Lokasi Node sensor & wilayah BMKG yang sinkron
 export const LOCATION_CONFIG = {
-  name: 'Kecamatan Kuningan',
+  name: 'Kel. Purwawinangun, Kec. Kuningan',
   province: 'Kabupaten Kuningan, Jawa Barat',
-  latitude: -6.9763,
-  longitude: 108.4834,
-  bmkgStationId: 'Stasiun Meteorologi Kertajati / BMKG Cirebon',
+  latitude: -6.9723261173,
+  longitude: 108.4825838351,
+  bmkgAdm4: '32.08.09.1006',
+  bmkgStationId: 'BMKG Prakiraan Cuaca — Purwawinangun',
 };

@@ -21,7 +21,7 @@ export function useBmkgComparison(fieldData: WeatherTelemetry | null) {
     };
 
     fetchBmkg();
-    const interval = setInterval(fetchBmkg, 10000);
+    const interval = setInterval(fetchBmkg, 15 * 60 * 1000); // 15 menit
     return () => clearInterval(interval);
   }, []);
 

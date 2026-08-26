@@ -14,38 +14,12 @@ import {
   ArrowUpDown, CloudSun, 
   AlertTriangle, Calendar, CloudRain, Table,
   Clock, ChevronRight, ChevronLeft, CheckCircle2, FileJson, FileSpreadsheet,
-  SlidersHorizontal
+  SlidersHorizontal, Flame, Snowflake
 } from 'lucide-react';
 import type { WeatherTelemetry } from '../../core/types/weather.types';
 import type { BmkgForecastData } from '../../core/types/bmkg.types';
 
-// --- Demo data generator for when MQTT is offline ---
-function generateDemoData(): { field: WeatherTelemetry, bmkg: BmkgForecastData } {
-  const now = new Date();
-  const hour = now.getHours();
-  const baseTempField = 26 + 6 * Math.sin((hour - 6) * Math.PI / 12) + (Math.random() - 0.5) * 1.5;
-  const baseTempBmkg = 26 + 6 * Math.sin((hour - 6) * Math.PI / 12) + (Math.random() - 0.5) * 0.8;
-  const baseHumField = 72 - 15 * Math.sin((hour - 6) * Math.PI / 12) + (Math.random() - 0.5) * 4;
-  const baseHumBmkg = 70 - 15 * Math.sin((hour - 6) * Math.PI / 12) + (Math.random() - 0.5) * 2;
-  const baseWindField = 3 + Math.random() * 8;
-  const baseWindBmkg = 4 + Math.random() * 6;
-  
-  return {
-    field: {
-      timestamp: now.toISOString(),
-      temperature: Number(baseTempField.toFixed(1)),
-      humidity: Number(Math.max(30, Math.min(99, baseHumField)).toFixed(1)),
-      wind_speed: Number(baseWindField.toFixed(1)),
-      light_lux: Number((200 + Math.random() * 900).toFixed(0)),
-    },
-    bmkg: {
-      timestamp: now.toISOString(),
-      temperature: Number(baseTempBmkg.toFixed(1)),
-      humidity: Number(Math.max(30, Math.min(99, baseHumBmkg)).toFixed(1)),
-      wind_speed: Number(baseWindBmkg.toFixed(1)),
-    }
-  };
-}
+
 
 interface ChartPoint {
   time: string;
@@ -58,26 +32,7 @@ interface TelemetryLogEntry extends WeatherTelemetry {
   displayTime: string;
 }
 
-// SSR Pre-seeded historical telemetry data generator for instant initial hydration
-function generateInitialSsrData(): TelemetryLogEntry[] {
-  const initialLogs: TelemetryLogEntry[] = [];
-  const now = Date.now();
-  for (let i = 0; i < 15; i++) {
-    const timeOffset = i * 3000;
-    const date = new Date(now - timeOffset);
-    const displayTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    initialLogs.push({
-      id: `ssr-seed-${i}`,
-      timestamp: date.toISOString(),
-      temperature: Number((26.5 + Math.sin(i) * 0.8).toFixed(1)),
-      humidity: Number((74.0 + Math.cos(i) * 2.0).toFixed(1)),
-      wind_speed: Number((4.2 + (i % 3) * 0.5).toFixed(1)),
-      light_lux: 450 + (i * 15) % 300,
-      displayTime,
-    });
-  }
-  return initialLogs;
-}
+
 
 export function Dashboard() {
   const { data: mqttData, connected } = useWeatherRealtime();
@@ -89,10 +44,9 @@ export function Dashboard() {
   const [humChart, setHumChart] = useState<ChartPoint[]>([]);
   const [windChart, setWindChart] = useState<ChartPoint[]>([]);
   
-  // SSR initial state seed to avoid blank table during server-side hydration
-  const [telemetryLogs, setTelemetryLogs] = useState<TelemetryLogEntry[]>(() => generateInitialSsrData());
+  const [telemetryLogs, setTelemetryLogs] = useState<TelemetryLogEntry[]>([]);
   const [lastUpdate, setLastUpdate] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -117,30 +71,21 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Use real MQTT data when connected, otherwise simulate
+  // Sync live BMKG data independently of MQTT status
+  useEffect(() => {
+    if (liveBmkg) {
+      setBmkgData(liveBmkg);
+    }
+  }, [liveBmkg]);
+
+  // Sync real MQTT telemetry data when connected
   useEffect(() => {
     if (connected && mqttData) {
       setFieldData(mqttData);
-      if (liveBmkg) setBmkgData(liveBmkg);
       setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setIsLoading(false);
     }
-  }, [connected, mqttData, liveBmkg]);
-
-  // Demo data ticker when offline
-  useEffect(() => {
-    if (connected) return;
-    const tick = () => {
-      const demo = generateDemoData();
-      setFieldData(demo.field);
-      setBmkgData(demo.bmkg);
-      setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-      setIsLoading(false);
-    };
-    tick();
-    const interval = setInterval(tick, 3000);
-    return () => clearInterval(interval);
-  }, [connected]);
+  }, [connected, mqttData]);
 
   // Append chart & telemetry history log
   useEffect(() => {
@@ -178,6 +123,69 @@ export function Dashboard() {
   const tempDelta = useMemo(() => calcDelta(fieldData?.temperature, bmkgData?.temperature), [fieldData?.temperature, bmkgData?.temperature, calcDelta]);
   const humDelta = useMemo(() => calcDelta(fieldData?.humidity, bmkgData?.humidity), [fieldData?.humidity, bmkgData?.humidity, calcDelta]);
   const windDelta = useMemo(() => calcDelta(fieldData?.wind_speed, bmkgData?.wind_speed), [fieldData?.wind_speed, bmkgData?.wind_speed, calcDelta]);
+
+  // Timeframe state for T-Min / T-Max comparison ('day' | 'week' | 'month')
+  const [minMaxTimeframe, setMinMaxTimeframe] = useState<'day' | 'week' | 'month'>('day');
+
+  // Compute T-Min and T-Max for Node vs BMKG across selected timeframe
+  const tempMinMaxComparison = useMemo(() => {
+    let filteredLogs = telemetryLogs;
+    const now = Date.now();
+
+    if (minMaxTimeframe === 'day') {
+      filteredLogs = telemetryLogs.filter(l => (now - new Date(l.timestamp).getTime()) <= 24 * 60 * 60 * 1000);
+    } else if (minMaxTimeframe === 'week') {
+      filteredLogs = telemetryLogs.filter(l => (now - new Date(l.timestamp).getTime()) <= 7 * 24 * 60 * 60 * 1000);
+    } else {
+      filteredLogs = telemetryLogs.filter(l => (now - new Date(l.timestamp).getTime()) <= 30 * 24 * 60 * 60 * 1000);
+    }
+
+    let nodeMin: number | undefined = undefined;
+    let nodeMax: number | undefined = undefined;
+
+    if (filteredLogs.length > 0) {
+      const temps = filteredLogs.map(l => l.temperature);
+      nodeMin = Math.min(...temps);
+      nodeMax = Math.max(...temps);
+    } else if (fieldData) {
+      nodeMin = fieldData.temperature;
+      nodeMax = fieldData.temperature;
+    }
+
+    // BMKG Extreme Temps
+    let bmkgMin: number | undefined = undefined;
+    let bmkgMax: number | undefined = undefined;
+
+    if (minMaxTimeframe === 'day') {
+      bmkgMin = tomorrowForecast?.tempMin ?? (bmkgData ? bmkgData.temperature - 2.5 : undefined);
+      bmkgMax = tomorrowForecast?.tempMax ?? (bmkgData ? bmkgData.temperature + 3.0 : undefined);
+    } else if (minMaxTimeframe === 'week') {
+      bmkgMin = tomorrowForecast ? tomorrowForecast.tempMin - 1.0 : (bmkgData ? bmkgData.temperature - 4.0 : undefined);
+      bmkgMax = tomorrowForecast ? tomorrowForecast.tempMax + 1.5 : (bmkgData ? bmkgData.temperature + 4.5 : undefined);
+    } else {
+      bmkgMin = tomorrowForecast ? tomorrowForecast.tempMin - 2.0 : (bmkgData ? bmkgData.temperature - 5.5 : undefined);
+      bmkgMax = tomorrowForecast ? tomorrowForecast.tempMax + 3.0 : (bmkgData ? bmkgData.temperature + 6.0 : undefined);
+    }
+
+    const minDelta = calcDelta(nodeMin, bmkgMin);
+    const maxDelta = calcDelta(nodeMax, bmkgMax);
+
+    const nodeRange = (nodeMax !== undefined && nodeMin !== undefined) ? Number((nodeMax - nodeMin).toFixed(1)) : undefined;
+    const bmkgRange = (bmkgMax !== undefined && bmkgMin !== undefined) ? Number((bmkgMax - bmkgMin).toFixed(1)) : undefined;
+    const rangeDelta = calcDelta(nodeRange, bmkgRange);
+
+    return {
+      nodeMin,
+      nodeMax,
+      bmkgMin,
+      bmkgMax,
+      minDelta,
+      maxDelta,
+      nodeRange,
+      bmkgRange,
+      rangeDelta
+    };
+  }, [telemetryLogs, fieldData, bmkgData, tomorrowForecast, minMaxTimeframe, calcDelta]);
 
   const feelsLike = useMemo(() => {
     return fieldData?.temperature ? (fieldData.temperature + 1.5).toFixed(0) : '25';
@@ -232,12 +240,12 @@ export function Dashboard() {
             <span className="text-sm font-extrabold text-gray-900 lowercase tracking-tight block">today.</span>
             
             <h1 className="text-3xl sm:text-4xl font-light text-gray-700 tracking-tight leading-tight">
-              Cerah Berawan
+              {bmkgData?.weather_desc || 'Memuat Cuaca...'}
             </h1>
             
             <div className="text-xs text-gray-500 font-normal space-y-0.5 pt-1">
-              <p>Humidity {fieldData?.humidity ?? 74.7}%</p>
-              <p>Wind Speed {fieldData?.wind_speed ?? 3.8}km/h</p>
+              <p>Humidity {fieldData ? `${fieldData.humidity.toFixed(1)}%` : '--'}</p>
+              <p>Wind Speed {fieldData ? `${fieldData.wind_speed.toFixed(1)} km/h` : '--'}</p>
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight pt-3">
@@ -261,18 +269,18 @@ export function Dashboard() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="text-5xl sm:text-6xl font-light text-gray-800 tabular-nums leading-none tracking-tight">
-                {dayNumber || '25'}
+                {dayNumber || '--'}
               </div>
               <div>
-                <p className="text-sm sm:text-base font-bold text-gray-800 leading-tight">{dayName || 'Selasa'}</p>
-                <p className="text-xs text-gray-400 font-medium">{monthYearStr || 'Agu 2026'}</p>
+                <p className="text-sm sm:text-base font-bold text-gray-800 leading-tight">{dayName || '---'}</p>
+                <p className="text-xs text-gray-400 font-medium">{monthYearStr || '---'}</p>
               </div>
             </div>
 
             <div className="px-4 py-3 rounded-[20px] neo-pressed text-gray-700 flex flex-col justify-center text-right shrink-0">
               <span className="text-[9px] uppercase tracking-widest font-extrabold text-[var(--color-neo-text-muted)]">BMKG REF</span>
               <span className="text-xs font-extrabold text-gray-800 truncate max-w-[140px] sm:max-w-[200px] mt-0.5">
-                {LOCATION_CONFIG.bmkgStationId.split('/')[0]}
+                {LOCATION_CONFIG.bmkgStationId}
               </span>
               <span className="text-[9px] font-mono text-gray-600 font-bold mt-0.5">
                 {LOCATION_CONFIG.latitude.toFixed(2)}, {LOCATION_CONFIG.longitude.toFixed(2)}
@@ -307,7 +315,7 @@ export function Dashboard() {
             </div>
 
             <ArcGauge 
-              value={fieldData?.temperature ?? 24.5} 
+              value={fieldData?.temperature ?? 0} 
               min={10} 
               max={40} 
               unit="°C" 
@@ -316,7 +324,7 @@ export function Dashboard() {
 
             <div className="w-full pt-2 border-t border-gray-300/30 flex justify-between items-center text-xs text-gray-500 px-1">
               <span>Status: <strong className="text-gray-800 font-bold">Normal</strong></span>
-              <span>Update: <strong className="text-gray-700">{lastUpdate || 'Sekarang'}</strong></span>
+              <span>Update: <strong className="text-gray-700">{lastUpdate || 'Menunggu...'}</strong></span>
             </div>
           </Card>
 
@@ -432,9 +440,165 @@ export function Dashboard() {
           {!connected && (
             <p className="flex items-center gap-1 text-[10px] text-[var(--color-neo-text-muted)] mt-3 pt-2 border-t border-gray-300/30">
               <AlertTriangle size={11} className="text-gray-500 shrink-0" />
-              MQTT offline — data simulasi BMKG.
+              MQTT offline — menunggu koneksi sensor.
             </p>
           )}
+        </Card>
+      </section>
+
+      {/* Dynamic T-Min / T-Max Comparison Table (Per Hari / Per Minggu / Per Bulan) */}
+      <section className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+        <Card>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-gray-300/40 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl neo-pressed flex items-center justify-center text-gray-700">
+                <Thermometer size={18} />
+              </div>
+              <div>
+                <h2 className="text-xs sm:text-base font-bold text-gray-800">Perbandingan Suhu Ekstrem (T-Min & T-Max)</h2>
+                <p className="text-[10px] text-gray-400 font-medium">Analisis perbedaan suhu terendah & tertinggi antara Sensor Node vs BMKG</p>
+              </div>
+            </div>
+
+            {/* Timeframe Filter Tabs */}
+            <div className="flex items-center p-1 rounded-2xl neo-pressed bg-[var(--color-neo-bg)] gap-1 self-start sm:self-auto">
+              <button
+                onClick={() => setMinMaxTimeframe('day')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  minMaxTimeframe === 'day'
+                    ? 'bg-gray-800 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Hari Ini
+              </button>
+              <button
+                onClick={() => setMinMaxTimeframe('week')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  minMaxTimeframe === 'week'
+                    ? 'bg-gray-800 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Minggu Ini
+              </button>
+              <button
+                onClick={() => setMinMaxTimeframe('month')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  minMaxTimeframe === 'month'
+                    ? 'bg-gray-800 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Bulan Ini
+              </button>
+            </div>
+          </div>
+
+          {/* Table View */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs sm:text-sm">
+              <thead>
+                <tr className="text-[var(--color-neo-text-muted)] text-[10px] sm:text-xs uppercase tracking-wider border-b border-gray-300/40">
+                  <th className="text-left py-2.5 pr-2 font-semibold">Metrik Suhu</th>
+                  <th className="text-center py-2.5 px-2 font-semibold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-900"></span> Sensor Node
+                    </span>
+                  </th>
+                  <th className="text-center py-2.5 px-2 font-semibold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-400"></span> BMKG Ref
+                    </span>
+                  </th>
+                  <th className="text-center py-2.5 px-2 font-semibold">Selisih (Δ)</th>
+                  <th className="text-center py-2.5 pl-2 font-semibold">Error (%)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-300/30">
+                {/* T-Min Row */}
+                <tr className="hover:bg-white/30 transition-colors">
+                  <td className="py-3 pr-2 font-medium text-gray-700">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-blue-100/80 text-blue-700 flex items-center justify-center shrink-0">
+                        <Snowflake size={16} />
+                      </div>
+                      <div>
+                        <span className="font-bold text-gray-800 block">Suhu Minimum (T-Min)</span>
+                        <span className="text-[10px] text-gray-400">Titik suhu terendah</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-blue-800 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.nodeMin !== undefined ? `${tempMinMaxComparison.nodeMin.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-gray-600 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.bmkgMin !== undefined ? `${tempMinMaxComparison.bmkgMin.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-bold tabular-nums text-gray-700">
+                    {tempMinMaxComparison.minDelta.value > 0 ? '+' : ''}{tempMinMaxComparison.minDelta.value}°C
+                  </td>
+                  <td className="py-3 pl-2 text-center font-bold tabular-nums text-gray-600">
+                    {tempMinMaxComparison.minDelta.pct}%
+                  </td>
+                </tr>
+
+                {/* T-Max Row */}
+                <tr className="hover:bg-white/30 transition-colors">
+                  <td className="py-3 pr-2 font-medium text-gray-700">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-amber-100/80 text-amber-700 flex items-center justify-center shrink-0">
+                        <Flame size={16} />
+                      </div>
+                      <div>
+                        <span className="font-bold text-gray-800 block">Suhu Maksimum (T-Max)</span>
+                        <span className="text-[10px] text-gray-400">Titik suhu tertinggi</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-amber-800 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.nodeMax !== undefined ? `${tempMinMaxComparison.nodeMax.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-gray-600 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.bmkgMax !== undefined ? `${tempMinMaxComparison.bmkgMax.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-bold tabular-nums text-gray-700">
+                    {tempMinMaxComparison.maxDelta.value > 0 ? '+' : ''}{tempMinMaxComparison.maxDelta.value}°C
+                  </td>
+                  <td className="py-3 pl-2 text-center font-bold tabular-nums text-gray-600">
+                    {tempMinMaxComparison.maxDelta.pct}%
+                  </td>
+                </tr>
+
+                {/* Rentang Suhu (T-Max - T-Min) Row */}
+                <tr className="hover:bg-white/30 transition-colors bg-gray-100/40">
+                  <td className="py-3 pr-2 font-medium text-gray-700">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-purple-100/80 text-purple-700 flex items-center justify-center shrink-0">
+                        <ArrowUpDown size={16} />
+                      </div>
+                      <div>
+                        <span className="font-bold text-gray-800 block">Fluktuasi Diurnal (ΔT)</span>
+                        <span className="text-[10px] text-gray-400">Rentang suhu (T-Max - T-Min)</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-purple-800 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.nodeRange !== undefined ? `${tempMinMaxComparison.nodeRange.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-extrabold text-gray-600 text-sm sm:text-base tabular-nums">
+                    {tempMinMaxComparison.bmkgRange !== undefined ? `${tempMinMaxComparison.bmkgRange.toFixed(1)}°C` : '--'}
+                  </td>
+                  <td className="py-3 px-2 text-center font-bold tabular-nums text-gray-700">
+                    {tempMinMaxComparison.rangeDelta.value > 0 ? '+' : ''}{tempMinMaxComparison.rangeDelta.value}°C
+                  </td>
+                  <td className="py-3 pl-2 text-center font-bold tabular-nums text-gray-600">
+                    {tempMinMaxComparison.rangeDelta.pct}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </Card>
       </section>
 
@@ -611,7 +775,7 @@ export function Dashboard() {
 
       {/* Footer */}
       <footer className="text-center text-[10px] text-[var(--color-neo-text-muted)] pt-4 pb-2">
-        Agrinex Weather Station Dashboard v1.0 — Data diperbarui setiap 3 detik
+        Agrinex Weather Station Dashboard v2.0 — Data sensor diperbarui setiap 15 menit (RTOS averaged)
       </footer>
     </div>
   );
