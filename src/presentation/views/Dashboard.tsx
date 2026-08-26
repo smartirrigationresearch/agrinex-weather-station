@@ -117,7 +117,15 @@ export function Dashboard() {
   // Append chart & telemetry history log
   useEffect(() => {
     if (!fieldData || !bmkgData) return;
-    const displayTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    const formatSensorTime = (isoString?: string) => {
+      if (!isoString) return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return isoString;
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+
+    const displayTime = formatSensorTime(fieldData.timestamp);
     
     const appendChart = (prev: ChartPoint[], fieldVal: number, bmkgVal: number) => {
       const next = [...prev, { time: displayTime, Field: fieldVal, BMKG: bmkgVal }];

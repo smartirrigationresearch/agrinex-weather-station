@@ -52,6 +52,35 @@ export class WeatherRepository implements IWeatherRepository {
   }
 
   async getHistory(limitCount: number = 50): Promise<WeatherTelemetry[]> {
-    return this.firebaseSource.getRecentTelemetry(limitCount);
+    try {
+      const fbData = await this.firebaseSource.getRecentTelemetry(limitCount);
+      if (fbData && fbData.length > 0) {
+        return fbData;
+      }
+    } catch (err) {
+      console.warn('[WeatherRepository] Firebase history fallback to API notice');
+    }
+
+    try {
+      const res = await fetch('/api/telemetry');
+      if (res.ok) {
+        const json = await res.json();
+        if (json && Array.isArray(json.history) && json.history.length > 0) {
+          return json.history;
+        } else if (json && (json.temperature !== undefined || json.temp !== undefined)) {
+          return [{
+            timestamp: json.timestamp || new Date().toISOString(),
+            temperature: Number(json.temperature ?? json.temp ?? 0),
+            humidity: Number(json.humidity ?? json.hum ?? 0),
+            wind_speed: Number(json.wind_speed ?? json.windSpeed ?? 0),
+            light_lux: Number(json.light_lux ?? json.lightLux ?? 0),
+          }];
+        }
+      }
+    } catch (err) {
+      console.warn('[WeatherRepository] API history fetch notice:', err);
+    }
+
+    return [];
   }
 }
