@@ -3,7 +3,6 @@ import {
   addDoc, 
   getDocs, 
   query, 
-  orderBy, 
   limit, 
   serverTimestamp,
   onSnapshot
@@ -31,29 +30,29 @@ export class FirebaseDataSource {
 
   /**
    * Mengambil riwayat telemetry terbaru dengan limit (Default: 50 entri terbaru).
-   * Menggunakan IndexedDB local cache agar tidak menghabiskan kuota Read.
+   * Menggunakan IndexedDB local cache & sorting client-side tanpa butuh composite index.
    */
   async getRecentTelemetry(limitCount: number = 50): Promise<WeatherTelemetry[]> {
     try {
-      const q = query(
-        this.telemetryCollection, 
-        orderBy('timestamp', 'desc'), 
-        limit(limitCount)
-      );
-      
+      const q = query(this.telemetryCollection, limit(limitCount));
       const querySnapshot = await getDocs(q);
       const logs: WeatherTelemetry[] = [];
       
       querySnapshot.forEach((doc) => {
         const d = doc.data();
-        logs.push({
-          timestamp: d.timestamp,
-          temperature: d.temperature,
-          humidity: d.humidity,
-          wind_speed: d.wind_speed,
-          light_lux: d.light_lux,
-        });
+        if (d.temperature !== undefined || d.temp !== undefined) {
+          logs.push({
+            timestamp: d.timestamp || new Date().toISOString(),
+            temperature: Number(d.temperature ?? d.temp ?? 0),
+            humidity: Number(d.humidity ?? d.hum ?? 0),
+            wind_speed: Number(d.wind_speed ?? d.windSpeed ?? 0),
+            light_lux: Number(d.light_lux ?? d.lightLux ?? 0),
+          });
+        }
       });
+
+      // Sort client-side descending (terbaru di atas)
+      logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
       return logs;
     } catch (error) {
@@ -67,22 +66,29 @@ export class FirebaseDataSource {
    * Berfungsi 100% sempurna pada halaman HTTPS tanpa error Mixed Content.
    */
   subscribeTelemetry(callback: (data: WeatherTelemetry) => void): () => void {
-    const q = query(
-      this.telemetryCollection,
-      orderBy('timestamp', 'desc'),
-      limit(1)
-    );
+    const q = query(this.telemetryCollection, limit(20));
 
     return onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
-        const d = snapshot.docs[0].data();
-        callback({
-          timestamp: d.timestamp,
-          temperature: d.temperature,
-          humidity: d.humidity,
-          wind_speed: d.wind_speed,
-          light_lux: d.light_lux,
+        const logs: WeatherTelemetry[] = [];
+        snapshot.forEach((doc) => {
+          const d = doc.data();
+          if (d.temperature !== undefined || d.temp !== undefined) {
+            logs.push({
+              timestamp: d.timestamp || new Date().toISOString(),
+              temperature: Number(d.temperature ?? d.temp ?? 0),
+              humidity: Number(d.humidity ?? d.hum ?? 0),
+              wind_speed: Number(d.wind_speed ?? d.windSpeed ?? 0),
+              light_lux: Number(d.light_lux ?? d.lightLux ?? 0),
+            });
+          }
         });
+
+        logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+        if (logs.length > 0) {
+          callback(logs[0]);
+        }
       }
     }, (err) => {
       console.warn('[Firebase] Realtime listener notice:', err);

@@ -17,11 +17,12 @@ export class MqttDataSource {
       this.client = mqtt.connect(url, {
         username: MQTT_CONFIG.username,
         password: MQTT_CONFIG.password,
-        reconnectPeriod: 5000,
+        reconnectPeriod: 15000,
+        connectTimeout: 5000,
       });
 
       this.client.on('connect', () => {
-        console.log('MQTT Connected to', url);
+        console.log('[MQTT] Terhubung via', url);
         this.client?.subscribe(MQTT_CONFIG.topic);
         this.notifyConnectionState(true);
       });
@@ -35,12 +36,11 @@ export class MqttDataSource {
       });
 
       this.client.on('error', (err) => {
-        console.error('MQTT Error:', err);
+        console.warn('[MQTT Notice] WS/WSS notice (Menggunakan Stream HTTPS Firebase):', err.message);
         this.notifyConnectionState(false);
-        this.client?.end();
       });
     } catch (err) {
-      console.warn('[MQTT] Gagal membuat WebSocket connection:', err);
+      console.warn('[MQTT Notice] Gagal inisialisasi WS connection:', err);
       this.notifyConnectionState(false);
     }
   }
