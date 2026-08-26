@@ -9,7 +9,7 @@ interface TelemetryEntry {
   updatedAt: number;
 }
 
-// In-memory array of historical 15-minute telemetry logs (max 100 entries)
+// Global in-memory storage for 15-minute telemetry logs
 let telemetryHistory: TelemetryEntry[] = [
   {
     timestamp: new Date().toISOString(),
@@ -35,6 +35,7 @@ export default function handler(
     return res.end();
   }
 
+  // POST Request: Hanya dipanggil oleh ESP8266 saat ada pengiriman data baru per 15 menit
   if (req.method === 'POST') {
     let bodyData = '';
     req.on('data', chunk => {
@@ -54,8 +55,12 @@ export default function handler(
             updatedAt: Date.now()
           };
 
-          // Hindari duplikasi jika timestamp persis sama dalam selang waktu singkat
-          if (telemetryHistory.length === 0 || telemetryHistory[0].timestamp !== newEntry.timestamp) {
+          // Cegah duplikasi jika timestamp persis sama
+          const isDuplicate = telemetryHistory.length > 0 && 
+            (telemetryHistory[0].timestamp === newEntry.timestamp || 
+             Math.abs(telemetryHistory[0].updatedAt - newEntry.updatedAt) < 10000);
+
+          if (!isDuplicate) {
             telemetryHistory.unshift(newEntry);
             if (telemetryHistory.length > 100) {
               telemetryHistory = telemetryHistory.slice(0, 100);
@@ -69,7 +74,7 @@ export default function handler(
           return res.end(JSON.stringify({ status: 'ok', latest: newEntry, history: telemetryHistory }));
         }
       } catch (err) {
-        console.error('Failed to parse POST body:', err);
+        console.error('[API] Error parsing POST payload:', err);
       }
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
@@ -78,7 +83,7 @@ export default function handler(
     return;
   }
 
-  // GET request: Return latest telemetry and full 15-minute history array
+  // GET Request: Murni MENGAMBIL data tanpa pernah menambah baris baru!
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
   return res.end(JSON.stringify({
