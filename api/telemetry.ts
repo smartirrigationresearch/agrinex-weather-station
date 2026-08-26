@@ -10,16 +10,7 @@ interface TelemetryEntry {
 }
 
 // Global in-memory storage for 15-minute telemetry logs
-let telemetryHistory: TelemetryEntry[] = [
-  {
-    timestamp: new Date().toISOString(),
-    temperature: 27.4,
-    humidity: 76.8,
-    wind_speed: 8.4,
-    light_lux: 54612,
-    updatedAt: Date.now()
-  }
-];
+let telemetryHistory: TelemetryEntry[] = [];
 
 export default function handler(
   req: IncomingMessage & { body?: any; method?: string }, 
@@ -55,10 +46,10 @@ export default function handler(
             updatedAt: Date.now()
           };
 
-          // Cegah duplikasi jika timestamp persis sama
+          // Strict deduplication check
           const isDuplicate = telemetryHistory.length > 0 && 
             (telemetryHistory[0].timestamp === newEntry.timestamp || 
-             Math.abs(telemetryHistory[0].updatedAt - newEntry.updatedAt) < 10000);
+             Math.abs(telemetryHistory[0].updatedAt - newEntry.updatedAt) < 60000);
 
           if (!isDuplicate) {
             telemetryHistory.unshift(newEntry);
@@ -83,7 +74,7 @@ export default function handler(
     return;
   }
 
-  // GET Request: Murni MENGAMBIL data tanpa pernah menambah baris baru!
+  // GET Request: Return history array without creating new timestamps
   res.statusCode = 200;
   res.setHeader('Content-Type', 'application/json');
   return res.end(JSON.stringify({
