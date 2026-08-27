@@ -7,7 +7,7 @@ import { StatusBadge } from '../components/neumorphic/StatusBadge';
 import { ChartWidget } from '../components/neumorphic/ChartWidget';
 import { ArcGauge } from '../components/neumorphic/ArcGauge';
 import { SkeletonCard, SkeletonGauge, SkeletonTable, Skeleton } from '../components/neumorphic/Skeleton';
-import { LOCATION_CONFIG } from '../../core/config/mqtt.config';
+import { LOCATION_CONFIG } from '../../core/config/location.config';
 import { downloadJson, downloadCsv } from '../../core/utils/export.utils';
 import { 
   Thermometer, Droplets, Wind, Sun, 
@@ -36,8 +36,8 @@ interface TelemetryLogEntry extends WeatherTelemetry {
 
 
 export function Dashboard() {
-  const { data: mqttData, connected } = useWeatherRealtime();
-  const { bmkgData: liveBmkg, tomorrowForecast } = useBmkgComparison(mqttData);
+  const { data: realtimeData, connected } = useWeatherRealtime();
+  const { bmkgData: liveBmkg, tomorrowForecast } = useBmkgComparison(realtimeData);
   
   const [fieldData, setFieldData] = useState<WeatherTelemetry | null>(null);
   const [bmkgData, setBmkgData] = useState<BmkgForecastData | null>(null);
@@ -79,14 +79,14 @@ export function Dashboard() {
     }
   }, [liveBmkg]);
 
-  // Sync real telemetry data (from MQTT or Firebase HTTPS Stream)
+  // Sync real telemetry data (from Firebase Realtime Stream)
   useEffect(() => {
-    if (mqttData) {
-      setFieldData(mqttData);
+    if (realtimeData) {
+      setFieldData(realtimeData);
       setLastUpdate(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       setIsLoading(false);
     }
-  }, [mqttData]);
+  }, [realtimeData]);
 
   // Initial load timeout protection (Selesai skeleton loader maks 1.5s)
   useEffect(() => {
@@ -478,7 +478,7 @@ export function Dashboard() {
           {!connected && (
             <p className="flex items-center gap-1 text-[10px] text-[var(--color-neo-text-muted)] mt-3 pt-2 border-t border-gray-300/30">
               <AlertTriangle size={11} className="text-gray-500 shrink-0" />
-              MQTT offline — menunggu koneksi sensor.
+              Koneksi Firebase offline — menunggu update sensor.
             </p>
           )}
         </Card>

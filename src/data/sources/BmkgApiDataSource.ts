@@ -1,5 +1,5 @@
 import type { BmkgForecastData, TomorrowForecast, BmkgApiResponse, BmkgCuacaEntry } from '../../core/types/bmkg.types';
-import { LOCATION_CONFIG } from '../../core/config/mqtt.config';
+import { LOCATION_CONFIG } from '../../core/config/location.config';
 
 const BMKG_API_BASE = 'https://api.bmkg.go.id/publik/prakiraan-cuaca';
 
